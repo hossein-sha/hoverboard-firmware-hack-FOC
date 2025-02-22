@@ -22,6 +22,7 @@
 
 #include <stdio.h>
 #include <stdlib.h> // for abs()
+#include <stdint.h>
 #include "stm32f1xx_hal.h"
 #include "defines.h"
 #include "setup.h"
@@ -99,9 +100,9 @@ extern volatile uint16_t pwm_captured_ch2_value;
 #endif
 
 
-//------------------------------------------------------------------------
-// Global variables set here in main.c
-//------------------------------------------------------------------------
+
+  // ========================= Global variables set here in main.c ===========================  
+	
 uint8_t backwardDrive;
 extern volatile uint32_t buzzerTimer;
 volatile uint32_t main_loop_counter;
@@ -113,20 +114,30 @@ int16_t dc_curr;                 // global variable for Total DC Link current
 int16_t cmdL;                    // global variable for Left Command 
 int16_t cmdR;                    // global variable for Right Command 
 
-//------------------------------------------------------------------------
-// Local variables
-//------------------------------------------------------------------------
+
+  // ========================= Local variables ===========================  
+
 #if defined(FEEDBACK_SERIAL_USART2) || defined(FEEDBACK_SERIAL_USART3)
 typedef struct{
-  uint16_t  start;
-  int16_t   cmd1;
-  int16_t   cmd2;
-  int16_t   speedR_meas;
-  int16_t   speedL_meas;
-  int16_t   batVoltage;
-  int16_t   boardTemp;
-  uint16_t  cmdLed;
-  uint16_t  checksum;
+    uint16_t  start;               // Start frame for data integrity
+
+    int16_t   uRear;        		   // Rear Left motor hall sensor U phase
+    int16_t   vRear;     		       // Rear Left motor hall sensor V phase
+    int16_t   wRear;       		     // Rear Left motor hall sensor W phase
+
+    int16_t   uFront;       		   // Front Left motor hall sensor U phase
+    int16_t   vFront;       		   // Front Left motor hall sensor V phase
+    int16_t   wFront;         		 // Front Left motor hall sensor W phase
+
+    int16_t   cmd1;                // Command 1 received
+    int16_t   cmd2;                // Command 2 received
+    int16_t   speedRear_meas;      // Measured speed of right motor
+    int16_t   speedFront_meas;     // Measured speed of left motor
+    int16_t   batVoltage;          // Battery voltage
+    int16_t   boardTemp;           // Board temperature
+    uint16_t  cmdLed;              // Command for LED control
+
+    uint16_t  checksum;            // Checksum for data validation
 } SerialFeedback;
 static SerialFeedback Feedback;
 #endif
@@ -253,7 +264,7 @@ int main(void) {
 
     readCommand();                        // Read Command: input1[inIdx].cmd, input2[inIdx].cmd
     calcAvgSpeed();                       // Calculate average measured speed: speedAvg, speedAvgAbs
-
+			
     #ifndef VARIANT_TRANSPOTTER
       // ####### MOTOR ENABLING: Only if the initial input is very small (for SAFETY) #######
       if (enable == 0 && !rtY_Left.z_errCode && !rtY_Right.z_errCode && 
@@ -344,7 +355,7 @@ int main(void) {
       #if defined(TANK_STEERING) && !defined(VARIANT_HOVERCAR) && !defined(VARIANT_SKATEBOARD) 
         // Tank steering (no mixing)
         cmdL = steer; 
-        cmdR = speed;
+        cmdR = speed; // If it becomes negative(-), Wheels turn in the opposite direction
       #else 
         // ####### MIXER #######
         mixerFcn(speed << 4, steer << 4, &cmdR, &cmdL);   // This function implements the equations above
@@ -506,21 +517,33 @@ int main(void) {
       }
     #endif
 
+
     // ####### FEEDBACK SERIAL OUT #######
     #if defined(FEEDBACK_SERIAL_USART2) || defined(FEEDBACK_SERIAL_USART3)
       if (main_loop_counter % 2 == 0) {    // Send data periodically every 10 ms
-        Feedback.start	        = (uint16_t)SERIAL_START_FRAME;
-        Feedback.cmd1           = (int16_t)input1[inIdx].cmd;
-        Feedback.cmd2           = (int16_t)input2[inIdx].cmd;
-        Feedback.speedR_meas	  = (int16_t)rtY_Right.n_mot;
-        Feedback.speedL_meas	  = (int16_t)rtY_Left.n_mot;
-        Feedback.batVoltage	    = (int16_t)batVoltageCalib;
-        Feedback.boardTemp	    = (int16_t)board_temp_deg_c;
+				
+        Feedback.start	      	= (uint16_t)SERIAL_START_FRAME;
 
+        Feedback.uRear      = (int16_t)rtU_Right.b_hallA; 		// u Rear Left
+        Feedback.vRear      = (int16_t)rtU_Right.b_hallB; 		// v Rear Left
+        Feedback.wRear      = (int16_t)rtU_Right.b_hallC; 		// w Rear Left
+
+        Feedback.uFront     = (int16_t)rtU_Left.b_hallA; 			// u Front Left 
+        Feedback.vFront     = (int16_t)rtU_Left.b_hallB; 			// v Front Left
+        Feedback.wFront     = (int16_t)rtU_Left.b_hallC; 			// w Front Left
+    
+        Feedback.cmd1        			  = (int16_t)input1[inIdx].cmd;
+        Feedback.cmd2           		= (int16_t)input2[inIdx].cmd;
+        Feedback.speedRear_meas	 	  = (int16_t)rtY_Right.n_mot;
+        Feedback.speedFront_meas	  = (int16_t)rtY_Left.n_mot;
+        Feedback.batVoltage	    		= (int16_t)batVoltageCalib;
+        Feedback.boardTemp	  		  = (int16_t)board_temp_deg_c;
+				
+			
         #if defined(FEEDBACK_SERIAL_USART2)
           if(__HAL_DMA_GET_COUNTER(huart2.hdmatx) == 0) {
             Feedback.cmdLed     = (uint16_t)sideboard_leds_L;
-            Feedback.checksum   = (uint16_t)(Feedback.start ^ Feedback.cmd1 ^ Feedback.cmd2 ^ Feedback.speedR_meas ^ Feedback.speedL_meas 
+            Feedback.checksum   = (uint16_t)(Feedback.start ^ Feedback.uR ^ Feedback.vR ^ Feedback.wR ^ Feedback.uL ^ Feedback.vL ^ Feedback.wL ^ Feedback.cmd1 ^ Feedback.cmd2 ^ Feedback.speedR_meas ^ Feedback.speedL_meas 
                                            ^ Feedback.batVoltage ^ Feedback.boardTemp ^ Feedback.cmdLed);
 
             HAL_UART_Transmit_DMA(&huart2, (uint8_t *)&Feedback, sizeof(Feedback));
@@ -529,14 +552,14 @@ int main(void) {
         #if defined(FEEDBACK_SERIAL_USART3)
           if(__HAL_DMA_GET_COUNTER(huart3.hdmatx) == 0) {
             Feedback.cmdLed     = (uint16_t)sideboard_leds_R;
-            Feedback.checksum   = (uint16_t)(Feedback.start ^ Feedback.cmd1 ^ Feedback.cmd2 ^ Feedback.speedR_meas ^ Feedback.speedL_meas 
+            Feedback.checksum   = (uint16_t)(Feedback.start ^ Feedback.uRear ^ Feedback.vRear ^ Feedback.wRear ^ Feedback.uFront ^ Feedback.vFront ^ Feedback.wFront ^ Feedback.cmd1 ^ Feedback.cmd2 ^ Feedback.speedRear_meas ^ Feedback.speedFront_meas 
                                            ^ Feedback.batVoltage ^ Feedback.boardTemp ^ Feedback.cmdLed);
-
-            HAL_UART_Transmit_DMA(&huart3, (uint8_t *)&Feedback, sizeof(Feedback));
+						            HAL_UART_Transmit_DMA(&huart3, (uint8_t *)&Feedback, sizeof(Feedback));
           }
         #endif
       }
     #endif
+
 
     // ####### POWEROFF BY POWER-BUTTON #######
     poweroffPressCheck();
@@ -609,15 +632,13 @@ int main(void) {
 
 
 // ===========================================================
-/** System Clock Configuration
-*/
+/** System Clock Configuration */
 void SystemClock_Config(void) {
   RCC_OscInitTypeDef RCC_OscInitStruct;
   RCC_ClkInitTypeDef RCC_ClkInitStruct;
   RCC_PeriphCLKInitTypeDef PeriphClkInit;
 
-  /**Initializes the CPU, AHB and APB busses clocks
-    */
+  /** Initializes the CPU, AHB and APB busses clocks **/
   RCC_OscInitStruct.OscillatorType      = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState            = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = 16;
@@ -626,8 +647,7 @@ void SystemClock_Config(void) {
   RCC_OscInitStruct.PLL.PLLMUL          = RCC_PLL_MUL16;
   HAL_RCC_OscConfig(&RCC_OscInitStruct);
 
-  /**Initializes the CPU, AHB and APB busses clocks
-    */
+  /** Initializes the CPU, AHB and APB busses clocks **/
   RCC_ClkInitStruct.ClockType           = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource        = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider       = RCC_SYSCLK_DIV1;
