@@ -21,7 +21,7 @@
 */
 
 #include <stdio.h>
-#include <stdlib.h> // for abs()
+#include <stdlib.h> 							// for abs()
 #include <stdint.h>
 #include "stm32f1xx_hal.h"
 #include "defines.h"
@@ -119,15 +119,15 @@ int16_t cmdR;                    // global variable for Right Command
 
 #if defined(FEEDBACK_SERIAL_USART2) || defined(FEEDBACK_SERIAL_USART3)
 typedef struct{
-    uint16_t  start;               // Start frame for data integrity
+    uint16_t  start;              // Start frame for data integrity
 
-    int16_t   uRear;        		   // Rear Left motor hall sensor U phase
-    int16_t   vRear;     		       // Rear Left motor hall sensor V phase
-    int16_t   wRear;       		     // Rear Left motor hall sensor W phase
+    int16_t   uRear;          		// Rear Right motor hall sensor U phase
+    int16_t   vRear;         			// Rear Right motor hall sensor V phase
+    int16_t   wRear;       			  // Rear Right motor hall sensor W phase
 
-    int16_t   uFront;       		   // Front Left motor hall sensor U phase
-    int16_t   vFront;       		   // Front Left motor hall sensor V phase
-    int16_t   wFront;         		 // Front Left motor hall sensor W phase
+    int16_t   uFront;      		    // Front Right motor hall sensor U phase
+    int16_t   vFront;       		  // Front Right motor hall sensor V phase
+    int16_t   wFront;       		  // Front Right motor hall sensor W phase
 
     int16_t   cmd1;                // Command 1 received
     int16_t   cmd2;                // Command 2 received
@@ -522,21 +522,21 @@ int main(void) {
     #if defined(FEEDBACK_SERIAL_USART2) || defined(FEEDBACK_SERIAL_USART3)
       if (main_loop_counter % 2 == 0) {    // Send data periodically every 10 ms
 				
-        Feedback.start	      	= (uint16_t)SERIAL_START_FRAME;
+        Feedback.start	        = (uint16_t)SERIAL_START_FRAME;
 
-        Feedback.uRear      = (int16_t)rtU_Right.b_hallA; 		// u Rear Left
-        Feedback.vRear      = (int16_t)rtU_Right.b_hallB; 		// v Rear Left
-        Feedback.wRear      = (int16_t)rtU_Right.b_hallC; 		// w Rear Left
+        Feedback.uRear     = (int16_t)rtU_Right.b_hallA; // u Rear Right
+        Feedback.vRear     = (int16_t)rtU_Right.b_hallB; // v Rear Right
+        Feedback.wRear     = (int16_t)rtU_Right.b_hallC; // w Rear Right
 
-        Feedback.uFront     = (int16_t)rtU_Left.b_hallA; 			// u Front Left 
-        Feedback.vFront     = (int16_t)rtU_Left.b_hallB; 			// v Front Left
-        Feedback.wFront     = (int16_t)rtU_Left.b_hallC; 			// w Front Left
+        Feedback.uFront    = (int16_t)rtU_Left.b_hallA; // u Front Right
+        Feedback.vFront    = (int16_t)rtU_Left.b_hallB; // v Front Right
+        Feedback.wFront    = (int16_t)rtU_Left.b_hallC; // w Front Right
     
-        Feedback.cmd1        			  = (int16_t)input1[inIdx].cmd;
-        Feedback.cmd2           		= (int16_t)input2[inIdx].cmd;
-        Feedback.speedRear_meas	 	  = (int16_t)rtY_Right.n_mot;
+        Feedback.cmd1        		    = (int16_t)input1[inIdx].cmd;
+        Feedback.cmd2         		  = (int16_t)input2[inIdx].cmd;
+        Feedback.speedRear_meas	  	= (int16_t)rtY_Right.n_mot;
         Feedback.speedFront_meas	  = (int16_t)rtY_Left.n_mot;
-        Feedback.batVoltage	    		= (int16_t)batVoltageCalib;
+        Feedback.batVoltage	 		    = (int16_t)batVoltageCalib;
         Feedback.boardTemp	  		  = (int16_t)board_temp_deg_c;
 				
 			
